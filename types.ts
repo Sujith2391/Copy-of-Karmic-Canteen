@@ -79,3 +79,10 @@ export interface Notification {
   requiresAction: boolean;
   responses?: { [userId: string]: 'yes' | 'no' };
 }
+
+export interface DailyWorkPlan {
+  id: string; // userId-date
+  userId: string;
+  date: string;
+  location: WorkLocation;
+}

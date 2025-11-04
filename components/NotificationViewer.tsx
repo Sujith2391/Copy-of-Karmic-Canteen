@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Notification, User, UserRole, WorkLocation } from '../types';
-import { onNotificationsUpdate, respondToNotification } from '../services/api';
+import { onNotificationsUpdate, respondToNotification, onWorkPlanUpdateForDate } from '../services/api';
 import { BellIcon, CloseIcon } from './icons';
 
 interface NotificationViewerProps {
@@ -10,22 +10,37 @@ interface NotificationViewerProps {
 const NotificationViewer: React.FC<NotificationViewerProps> = ({ user }) => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
-    
-    const shouldReceiveNotifications = user.role === UserRole.EMPLOYEE && 
-                                       (user.workLocation === WorkLocation.MAIN_OFFICE);
+    const [shouldReceive, setShouldReceive] = useState(false);
 
     useEffect(() => {
-        if (shouldReceiveNotifications) {
+        if (user.role !== UserRole.EMPLOYEE) {
+            setShouldReceive(false);
+            return;
+        }
+
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowDateString = tomorrow.toISOString().split('T')[0];
+
+        // Listen for changes to tomorrow's work plan
+        const unsub = onWorkPlanUpdateForDate(user.id, tomorrowDateString, (plan) => {
+            // Use tomorrow's plan if set, otherwise fall back to default location
+            const effectiveLocation = plan ? plan.location : user.workLocation;
+            setShouldReceive(effectiveLocation === WorkLocation.MAIN_OFFICE);
+        });
+
+        return () => unsub();
+    }, [user.id, user.role, user.workLocation]);
+
+    useEffect(() => {
+        if (shouldReceive) {
             const unsub = onNotificationsUpdate(setNotifications);
             return () => unsub();
         }
-    }, [shouldReceiveNotifications]);
+    }, [shouldReceive]);
     
-    // Add event listener to toggle visibility from header
     useEffect(() => {
-        const viewer = document.getElementById('notification-viewer');
         const bell = document.querySelector('[aria-label="Toggle notifications"]');
-        
         const handleToggle = () => setIsOpen(prev => !prev);
         
         if (bell) bell.addEventListener('click', handleToggle);
@@ -43,7 +58,7 @@ const NotificationViewer: React.FC<NotificationViewerProps> = ({ user }) => {
         }
     };
     
-    if (!shouldReceiveNotifications) return null;
+    if (!shouldReceive) return null;
 
     return (
         <div id="notification-viewer" className={`fixed top-0 right-0 h-full bg-surface shadow-2xl z-40 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'} w-80 max-w-[90vw]`}>

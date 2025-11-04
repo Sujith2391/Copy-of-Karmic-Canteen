@@ -57,10 +57,10 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ onRegisterSucce
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+      <div className="mb-8">
+        <Logo className="h-12 w-auto" />
+      </div>
       <div className="w-full max-w-md p-8 space-y-6 bg-surface rounded-2xl shadow-lg">
-        <div className="flex justify-center">
-          <Logo />
-        </div>
         <div>
           <h2 className="text-2xl font-bold text-center text-onSurface">Create Your Account</h2>
           <p className="mt-2 text-center text-slate-500">Join the Karmic Canteen portal.</p>

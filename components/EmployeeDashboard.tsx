@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, WorkLocation } from '../types';
-import { updateUser } from '../services/api';
+import { updateUser, getWorkPlanForDate, updateWorkPlan } from '../services/api';
 import WeeklyMealSelector from './WeeklyMealSelector';
 import MealSelectionReminder from './MealSelectionReminder';
+import DailyWorkPlanner from './DailyWorkPlanner';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -11,9 +12,46 @@ interface EmployeeDashboardProps {
 const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
   const [currentUser, setCurrentUser] = useState<User>(user);
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+  const [tomorrowsLocation, setTomorrowsLocation] = useState<WorkLocation | null>(null);
+  const [isPlanLoading, setIsPlanLoading] = useState(true);
 
   // Time simulator for testing the 12:30 PM reminder
   const [simulatedTime, setSimulatedTime] = useState({ hour: new Date().getHours(), minute: new Date().getMinutes() });
+
+  const getTomorrowDateString = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
+  useEffect(() => {
+    const fetchPlan = async () => {
+        setIsPlanLoading(true);
+        const tomorrow = getTomorrowDateString();
+        try {
+            const plan = await getWorkPlanForDate(user.id, tomorrow);
+            setTomorrowsLocation(plan ? plan.location : null);
+        } catch (error) {
+            console.error("Failed to fetch tomorrow's work plan", error);
+        } finally {
+            setIsPlanLoading(false);
+        }
+    };
+    fetchPlan();
+  }, [user.id]);
+
+  const handlePlanChange = async (location: WorkLocation) => {
+      setIsPlanLoading(true);
+      const tomorrow = getTomorrowDateString();
+      try {
+        await updateWorkPlan(user.id, tomorrow, location);
+        setTomorrowsLocation(location);
+      } catch (error) {
+        console.error("Failed to update tomorrow's work plan", error);
+      } finally {
+        setIsPlanLoading(false);
+      }
+  };
 
   const handleLocationChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newLocation = e.target.value as WorkLocation;
@@ -22,11 +60,9 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
       await updateUser(currentUser.id, { workLocation: newLocation });
       const updatedUser = { ...currentUser, workLocation: newLocation };
       setCurrentUser(updatedUser);
-      // Also update localStorage to persist this change across sessions
       localStorage.setItem('karmic-canteen-user', JSON.stringify(updatedUser));
     } catch (error) {
       console.error("Failed to update work location", error);
-      // Optionally show an error to the user
     } finally {
       setIsUpdatingLocation(false);
     }
@@ -39,10 +75,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
         <p className="text-slate-500">Select your meals for the upcoming week. Changes for a day must be made by 12:30 PM of the previous day.</p>
       </div>
 
-      <div className="bg-surface p-4 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+      <div className="bg-surface p-4 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-center">
         <div>
             <label htmlFor="work-location" className="block text-sm font-medium text-slate-700">
-              Your Work Location
+              Your Default Location
             </label>
             <select
               id="work-location"
@@ -53,8 +89,16 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
             >
               {Object.values(WorkLocation).map(loc => <option key={loc} value={loc}>{loc}</option>)}
             </select>
-            <p className="text-xs text-slate-500 mt-1">Notifications are disabled for WFH and 'Other' locations.</p>
+            <p className="text-xs text-slate-500 mt-1">This is your permanent setting.</p>
         </div>
+
+        <DailyWorkPlanner 
+            user={user} 
+            tomorrowsLocation={tomorrowsLocation} 
+            onPlanChange={handlePlanChange} 
+            disabled={isPlanLoading} 
+        />
+
         <div className="bg-slate-50 p-3 rounded-lg">
             <label htmlFor="time-slider" className="block text-sm font-medium text-slate-700 mb-2">
               🕒 Time Simulator
@@ -79,7 +123,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
         </div>
       </div>
       
-      <MealSelectionReminder user={currentUser} simulatedTime={simulatedTime} />
+      <MealSelectionReminder user={currentUser} simulatedTime={simulatedTime} tomorrowsLocation={tomorrowsLocation} />
 
       <WeeklyMealSelector user={currentUser} simulatedTime={simulatedTime} />
     </div>

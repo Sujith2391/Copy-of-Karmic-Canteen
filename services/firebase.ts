@@ -1,5 +1,5 @@
 // This file simulates a Firestore database connection for development purposes.
-import { User, UserRole, DailyMenu, MealType, MealConfirmation, Feedback, WorkLocation, Notification } from '../types';
+import { User, UserRole, DailyMenu, MealType, MealConfirmation, Feedback, WorkLocation, Notification, DailyWorkPlan } from '../types';
 
 // --- MOCK DATABASE STORE ---
 const MOCK_EMPLOYEES: User[] = [
@@ -84,11 +84,12 @@ const dbStore = {
     confirmations: mockConfirmations.map(c => ({ id: `${c.userId}-${c.date}`, ...c })),
     feedback: mockFeedback.map(f => ({ id: f.id, ...f })),
     notifications: mockNotifications.map(n => ({ id: n.id, ...n })),
+    dailyWorkPlans: [] as (DailyWorkPlan & { id: string })[],
 };
 
 type CollectionName = keyof typeof dbStore;
 const listeners: { [key: string]: Function[] } = {
-    users: [], weeklyMenu: [], confirmations: [], feedback: [], notifications: [],
+    users: [], weeklyMenu: [], confirmations: [], feedback: [], notifications: [], dailyWorkPlans: [],
 };
 
 const notifyListeners = (collectionName: CollectionName) => {

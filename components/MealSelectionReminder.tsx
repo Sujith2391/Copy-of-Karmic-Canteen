@@ -6,9 +6,10 @@ import { BellIcon, CloseIcon } from './icons';
 interface MealSelectionReminderProps {
   user: User;
   simulatedTime: { hour: number; minute: number };
+  tomorrowsLocation: WorkLocation | null;
 }
 
-const MealSelectionReminder: React.FC<MealSelectionReminderProps> = ({ user, simulatedTime }) => {
+const MealSelectionReminder: React.FC<MealSelectionReminderProps> = ({ user, simulatedTime, tomorrowsLocation }) => {
   const [showReminder, setShowReminder] = useState(false);
   const [hasConfirmedForTomorrow, setHasConfirmedForTomorrow] = useState(true); // Assume confirmed initially
 
@@ -33,19 +34,21 @@ const MealSelectionReminder: React.FC<MealSelectionReminderProps> = ({ user, sim
       }
     };
     
-    // Check once when component mounts or user changes
     checkConfirmationForTomorrow();
   }, [user.id]);
   
   useEffect(() => {
+    // Use tomorrow's plan if available, otherwise fall back to the user's default setting.
+    const effectiveLocation = tomorrowsLocation ?? user.workLocation;
+
     const shouldShow =
-      user.workLocation === WorkLocation.MAIN_OFFICE &&
+      effectiveLocation === WorkLocation.MAIN_OFFICE &&
       simulatedTime.hour === 12 &&
       simulatedTime.minute >= 30 &&
       !hasConfirmedForTomorrow;
     
     setShowReminder(shouldShow);
-  }, [simulatedTime, user.workLocation, hasConfirmedForTomorrow]);
+  }, [simulatedTime, user.workLocation, hasConfirmedForTomorrow, tomorrowsLocation]);
 
   if (!showReminder) {
     return null;
@@ -76,7 +79,7 @@ const MealSelectionReminder: React.FC<MealSelectionReminderProps> = ({ user, sim
           </button>
         </div>
         <p className="mb-4 text-slate-600">
-          Are you working from home today? Have you changed your work location? If not, please register for tomorrow's meals before the 12:30 PM deadline.
+          It's past 12:30 PM! Please select your meals for tomorrow to help us reduce waste. If your plans have changed, please update your work location plan for tomorrow.
         </p>
         <button
           onClick={() => setShowReminder(false)}

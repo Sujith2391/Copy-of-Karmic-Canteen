@@ -43,10 +43,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onSwitchToRegister }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
-      <div className="w-full max-w-md p-8 space-y-8 bg-surface rounded-2xl shadow-lg">
-        <div className="flex justify-center">
-            <Logo />
-        </div>
+      <div className="mb-8">
+        <Logo className="h-12 w-auto" />
+      </div>
+      <div className="w-full max-w-md p-8 space-y-6 bg-surface rounded-2xl shadow-lg">
         <div>
           <h2 className="text-2xl font-bold text-center text-onSurface">Canteen Portal Login</h2>
           <p className="mt-2 text-center text-slate-500">Mindful eating, zero waste.</p>

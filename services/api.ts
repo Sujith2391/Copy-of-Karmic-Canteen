@@ -1,4 +1,4 @@
-import { User, UserRole, DailyMenu, MealType, MealConfirmation, ConsolidatedReport, MenuItem, EmployeeConfirmationDetails, Feedback, Notification } from '../types';
+import { User, UserRole, DailyMenu, MealType, MealConfirmation, ConsolidatedReport, MenuItem, EmployeeConfirmationDetails, Feedback, Notification, DailyWorkPlan, WorkLocation } from '../types';
 import { db, collection, doc, getDoc, getDocs, updateDoc, onSnapshot, addDoc, deleteDoc, query, where, setDoc } from './firebase';
 
 // --- API FUNCTIONS (Refactored for Firestore-like API) ---
@@ -282,4 +282,35 @@ export const respondToNotification = async (notificationId: string, userId: stri
         const newResponses = { ...currentNotif.responses, [userId]: response };
         await updateDoc(notifDocRef, { responses: newResponses });
     }
+};
+
+// --- DAILY WORK PLAN FUNCTIONS ---
+export const getWorkPlanForDate = async (userId: string, date: string): Promise<DailyWorkPlan | null> => {
+    const id = `${userId}-${date}`;
+    const docRef = doc(db, 'dailyWorkPlans', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data() as DailyWorkPlan;
+    }
+    return null;
+};
+
+export const updateWorkPlan = async (userId: string, date: string, location: WorkLocation): Promise<void> => {
+    const id = `${userId}-${date}`;
+    const docRef = doc(db, 'dailyWorkPlans', id);
+    const plan: Omit<DailyWorkPlan, 'id'> = { userId, date, location };
+    await setDoc(docRef, plan);
+};
+
+export const onWorkPlanUpdateForDate = (userId: string, date: string, callback: (plan: DailyWorkPlan | null) => void) => {
+    const id = `${userId}-${date}`;
+    const unsub = onSnapshot(collection(db, 'dailyWorkPlans'), (snapshot) => {
+        const docData = snapshot.docs.find((d: any) => d.data().userId === userId && d.data().date === date);
+        if (docData) {
+            callback(docData.data() as DailyWorkPlan);
+        } else {
+            callback(null);
+        }
+    });
+    return unsub;
 };
