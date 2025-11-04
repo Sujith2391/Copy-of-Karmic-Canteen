@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Karmic Canteen",
+  "description": "A web application to eliminate food wastage and streamline meal planning between employees and the canteen administration. Employees can opt-in for meals, and admins can manage menus and view consumption analytics.",
+  "requestFramePermissions": []
+}
