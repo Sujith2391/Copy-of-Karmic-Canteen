@@ -1,6 +1,14 @@
 import React from 'react';
 
-const Logo: React.FC<{ className?: string; textColorClassName?: string }> = ({ className = 'h-10 w-auto', textColorClassName = 'text-primary' }) => (
+const Logo: React.FC<{
+  className?: string;
+  textColorClassName?: string;
+  showText?: boolean;
+}> = ({
+  className = 'h-10 w-auto',
+  textColorClassName = 'text-primary',
+  showText = true,
+}) => (
   <div className="flex items-center space-x-3">
     <svg 
       className={className} 
@@ -38,9 +46,11 @@ const Logo: React.FC<{ className?: string; textColorClassName?: string }> = ({ c
         </clipPath>
       </defs>
     </svg>
-    <span className={`text-xl font-bold uppercase tracking-wider ${textColorClassName}`}>
-      Karmic Design Pvt Ltd
-    </span>
+    {showText && (
+      <span className={`text-xl font-bold uppercase tracking-wider ${textColorClassName}`}>
+        Karmic Design Pvt Ltd
+      </span>
+    )}
   </div>
 );
 
