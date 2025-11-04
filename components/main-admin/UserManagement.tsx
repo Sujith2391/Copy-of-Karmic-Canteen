@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole } from '../../types';
+import { User, UserRole, WorkLocation } from '../../types';
 import { onUsersUpdate, deleteUser } from '../../services/api';
 import UserFormModal from './UserFormModal';
 import { UsersIcon, EditIcon, DeleteIcon } from '../icons';
@@ -76,6 +76,7 @@ const UserManagement: React.FC = () => {
             <thead className="bg-slate-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Details</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Role</th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -87,6 +88,10 @@ const UserManagement: React.FC = () => {
                     <div className="text-sm font-medium text-slate-900">{user.name}</div>
                     <div className="text-sm text-slate-500">{user.email}</div>
                   </td>
+                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                     <div>ID: <span className="font-medium text-slate-700">{user.employeeId}</span></div>
+                     <div>Loc: <span className="font-medium text-slate-700">{user.workLocation}</span></div>
+                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === UserRole.MAIN_ADMIN ? 'bg-purple-100 text-purple-800' : user.role === UserRole.ADMIN ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
                       {getRoleDisplayName(user.role)}

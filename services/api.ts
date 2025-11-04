@@ -1,5 +1,5 @@
-import { User, UserRole, DailyMenu, MealType, MealConfirmation, ConsolidatedReport, MenuItem, EmployeeConfirmationDetails } from '../types';
-import { db, collection, doc, getDoc, getDocs, updateDoc, onSnapshot, addDoc, deleteDoc } from './firebase';
+import { User, UserRole, DailyMenu, MealType, MealConfirmation, ConsolidatedReport, MenuItem, EmployeeConfirmationDetails, Feedback, Notification } from '../types';
+import { db, collection, doc, getDoc, getDocs, updateDoc, onSnapshot, addDoc, deleteDoc, query, where, setDoc } from './firebase';
 
 // --- API FUNCTIONS (Refactored for Firestore-like API) ---
 
@@ -14,7 +14,8 @@ export const getEmployees = async (): Promise<User[]> => {
     return allUsers.filter(user => user.role === UserRole.EMPLOYEE);
 }
 
-export const getMenuForDay = async (dayOfWeek: number): Promise<DailyMenu> => {
+export const getMenuForDay = async (date: Date): Promise<DailyMenu> => {
+    const dayOfWeek = date.getDay();
     const menuDocRef = doc(db, 'weeklyMenu', String(dayOfWeek));
     const menuSnap = await getDoc(menuDocRef);
 
@@ -22,10 +23,7 @@ export const getMenuForDay = async (dayOfWeek: number): Promise<DailyMenu> => {
         throw new Error(`Menu for day ${dayOfWeek} not found`);
     }
 
-    const today = new Date();
-    const targetDate = new Date();
-    targetDate.setDate(today.getDate() - today.getDay() + dayOfWeek);
-    const dateString = targetDate.toISOString().split('T')[0];
+    const dateString = date.toISOString().split('T')[0];
     
     const menuTemplate = menuSnap.data();
     const menu: DailyMenu = {
@@ -33,20 +31,9 @@ export const getMenuForDay = async (dayOfWeek: number): Promise<DailyMenu> => {
         [MealType.BREAKFAST]: menuTemplate?.[MealType.BREAKFAST] || [],
         [MealType.LUNCH]: menuTemplate?.[MealType.LUNCH] || [],
         [MealType.SNACKS]: menuTemplate?.[MealType.SNACKS] || [],
+        [MealType.DINNER]: menuTemplate?.[MealType.DINNER] || [],
     };
     return menu;
-};
-
-export const getMenuForToday = (): Promise<DailyMenu> => {
-  const dayOfWeek = new Date().getDay();
-  return getMenuForDay(dayOfWeek);
-};
-
-const getTodaysDateString = () => new Date().toISOString().split('T')[0];
-const getTomorrowsDateString = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split('T')[0];
 };
 
 const getConfirmationForDate = async (userId: string, date: string): Promise<MealConfirmation> => {
@@ -58,118 +45,57 @@ const getConfirmationForDate = async (userId: string, date: string): Promise<Mea
         return confirmationSnap.data() as MealConfirmation;
     }
 
-    // If no confirmation exists for the date, return a default new one.
     return {
         userId,
         date,
         [MealType.BREAKFAST]: false,
         [MealType.LUNCH]: false,
         [MealType.SNACKS]: false,
-        breakfastReconfirmed: false,
-        lunchReconfirmed: false,
-        snacksReconfirmed: false,
-        wfh: false,
+        [MealType.DINNER]: false,
     };
 };
 
-export const getUserConfirmation = async (userId: string): Promise<MealConfirmation> => {
-  const date = getTodaysDateString();
-  return getConfirmationForDate(userId, date);
-};
-
-export const getTomorrowsConfirmation = async (userId: string): Promise<MealConfirmation> => {
-    const date = getTomorrowsDateString();
-    return getConfirmationForDate(userId, date);
-};
-
-export const setWfhForTomorrow = async (userId: string, wfhStatus: boolean): Promise<MealConfirmation> => {
-    const date = getTomorrowsDateString();
-    const confirmationId = `${userId}-${date}`;
-    const confirmationDocRef = doc(db, 'confirmations', confirmationId);
-    
-    const currentConfirmation = await getConfirmationForDate(userId, date);
-    
-    let payloadUpdate: Partial<MealConfirmation> = { wfh: wfhStatus };
-
-    // If setting WFH to true, automatically opt-out of all meals for that day.
-    if (wfhStatus) {
-        payloadUpdate = {
-            ...payloadUpdate,
-            [MealType.BREAKFAST]: false,
-            [MealType.LUNCH]: false,
-            [MealType.SNACKS]: false,
-            breakfastReconfirmed: false,
-            lunchReconfirmed: false,
-            snacksReconfirmed: false,
-        };
+export const getConfirmationsForWeek = async (userId: string, weekStartDate: Date): Promise<Record<string, MealConfirmation>> => {
+    const confirmations: Record<string, MealConfirmation> = {};
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(weekStartDate);
+        date.setDate(date.getDate() + i);
+        const dateString = date.toISOString().split('T')[0];
+        confirmations[dateString] = await getConfirmationForDate(userId, dateString);
     }
-
-    const finalPayload = { ...currentConfirmation, ...payloadUpdate };
-
-    await updateDoc(confirmationDocRef, finalPayload);
-    const updatedDoc = await getDoc(confirmationDocRef);
-    return updatedDoc.data() as MealConfirmation;
+    return confirmations;
 };
 
 
-export const updateConfirmation = async (userId: string, mealType: MealType, status: boolean): Promise<MealConfirmation> => {
-  const date = getTodaysDateString();
+export const updateConfirmation = async (userId: string, date: string, mealType: MealType, status: boolean): Promise<MealConfirmation> => {
   const confirmationId = `${userId}-${date}`;
   const confirmationDocRef = doc(db, 'confirmations', confirmationId);
 
-  // Firestore's `update` can create a document if it doesn't exist via `set` with merge.
-  // Our simulator's `updateDoc` mimics this behavior.
-  const currentConfirmation = await getUserConfirmation(userId);
+  const currentConfirmation = await getConfirmationForDate(userId, date);
   const payload = { ...currentConfirmation, [mealType]: status };
-
-  if (!status) {
-    if (mealType === MealType.BREAKFAST) payload.breakfastReconfirmed = false;
-    if (mealType === MealType.LUNCH) payload.lunchReconfirmed = false;
-    if (mealType === MealType.SNACKS) payload.snacksReconfirmed = false;
-  }
   
-  await updateDoc(confirmationDocRef, payload);
+  await setDoc(confirmationDocRef, payload);
   const updatedDoc = await getDoc(confirmationDocRef);
   return updatedDoc.data() as MealConfirmation;
 };
 
-export const reconfirmMeal = async (userId: string, mealType: MealType): Promise<MealConfirmation> => {
-    const date = getTodaysDateString();
-    const confirmationId = `${userId}-${date}`;
-    const confirmationDocRef = doc(db, 'confirmations', confirmationId);
-    
-    const reconfirmKey = `${mealType.toLowerCase()}Reconfirmed` as keyof MealConfirmation;
-    await updateDoc(confirmationDocRef, { [reconfirmKey]: true });
-
-    const updatedDoc = await getDoc(confirmationDocRef);
-    return updatedDoc.data() as MealConfirmation;
-};
 
 export const getConsolidatedReport = async (): Promise<ConsolidatedReport[]> => {
+    const todaysDateString = new Date().toISOString().split('T')[0];
     const confirmationsSnapshot = await getDocs(collection(db, 'confirmations'));
     const todaysConfirmations = confirmationsSnapshot.docs
         .map(d => d.data() as MealConfirmation)
-        .filter(c => c.date === getTodaysDateString());
+        .filter(c => c.date === todaysDateString);
 
     const report: ConsolidatedReport[] = [];
-    const mealTypes = [MealType.BREAKFAST, MealType.LUNCH, MealType.SNACKS];
+    const mealTypes = [MealType.BREAKFAST, MealType.LUNCH, MealType.SNACKS, MealType.DINNER];
 
     mealTypes.forEach(mealType => {
         const confirmed = todaysConfirmations.filter(c => c[mealType]).length;
-        
-        let reconfirmed = 0;
-        if (mealType === MealType.BREAKFAST) reconfirmed = todaysConfirmations.filter(c => c[mealType] && c.breakfastReconfirmed).length;
-        if (mealType === MealType.LUNCH) reconfirmed = todaysConfirmations.filter(c => c[mealType] && c.lunchReconfirmed).length;
-        if (mealType === MealType.SNACKS) reconfirmed = todaysConfirmations.filter(c => c[mealType] && c.snacksReconfirmed).length;
-        
-        const pickedUp = Math.floor(reconfirmed * (0.95 + Math.random() * 0.05)); 
-        
         report.push({
-            date: getTodaysDateString(),
+            date: todaysDateString,
             mealType,
             confirmed,
-            reconfirmed,
-            pickedUp
         });
     });
 
@@ -177,13 +103,14 @@ export const getConsolidatedReport = async (): Promise<ConsolidatedReport[]> => 
 }
 
 export const getEmployeeConfirmations = async (): Promise<EmployeeConfirmationDetails[]> => {
+    const todaysDateString = new Date().toISOString().split('T')[0];
     const [employees, confirmationsSnapshot] = await Promise.all([
         getEmployees(),
         getDocs(collection(db, 'confirmations'))
     ]);
     const todaysConfirmations = confirmationsSnapshot.docs
         .map(d => d.data() as MealConfirmation)
-        .filter(c => c.date === getTodaysDateString());
+        .filter(c => c.date === todaysDateString);
 
     const details = employees.map(employee => {
         let confirmation = todaysConfirmations.find(c => c.userId === employee.id);
@@ -191,13 +118,11 @@ export const getEmployeeConfirmations = async (): Promise<EmployeeConfirmationDe
         if (!confirmation) {
             confirmation = {
                 userId: employee.id,
-                date: getTodaysDateString(),
+                date: todaysDateString,
                 [MealType.BREAKFAST]: false,
                 [MealType.LUNCH]: false,
                 [MealType.SNACKS]: false,
-                breakfastReconfirmed: false,
-                lunchReconfirmed: false,
-                snacksReconfirmed: false,
+                [MealType.DINNER]: false,
             };
         }
         
@@ -206,9 +131,7 @@ export const getEmployeeConfirmations = async (): Promise<EmployeeConfirmationDe
     return details;
 };
 
-// New function for real-time updates on the admin dashboard
 export const onDashboardUpdate = (callback: (data: { report: ConsolidatedReport[], details: EmployeeConfirmationDetails[] }) => void) => {
-    // When confirmations change, recalculate everything.
     const unsubConfirmations = onSnapshot(collection(db, 'confirmations'), async () => {
         const [report, details] = await Promise.all([
             getConsolidatedReport(),
@@ -217,26 +140,18 @@ export const onDashboardUpdate = (callback: (data: { report: ConsolidatedReport[
         callback({ report, details });
     });
 
-    // In a real app, you might also listen to user or menu collection changes.
-    return unsubConfirmations; // Return the unsubscribe function
+    return unsubConfirmations;
 };
 
-
 export const getWasteAnalytics = async (): Promise<ConsolidatedReport[]> => {
-    // This function can remain as is, as it's meant to show historical (mock) data.
-    // In a real app, this would query a collection of historical reports.
-    const mockHistoricalData: Omit<ConsolidatedReport, 'reconfirmed'>[] = [
-        { date: 'Day 1', mealType: MealType.LUNCH, confirmed: 150, pickedUp: 142 },
-        { date: 'Day 2', mealType: MealType.LUNCH, confirmed: 145, pickedUp: 140 },
-        { date: 'Day 3', mealType: MealType.LUNCH, confirmed: 160, pickedUp: 155 },
-        { date: 'Day 4', mealType: MealType.LUNCH, confirmed: 152, pickedUp: 148 },
-        { date: 'Day 5', mealType: MealType.LUNCH, confirmed: 155, pickedUp: 145 },
+    const mockHistoricalData: Omit<ConsolidatedReport, 'date' | 'mealType'>[] = [
+        { confirmed: 150 }, { confirmed: 145 }, { confirmed: 160 }, { confirmed: 152 }, { confirmed: 155 },
     ];
-    const historicalWithReconfirmed = mockHistoricalData.map(d => ({
-        ...d,
-        reconfirmed: Math.floor(d.confirmed * (0.9 + Math.random() * 0.05))
-    }))
-    return historicalWithReconfirmed;
+    return mockHistoricalData.map((d, i) => ({
+        date: `Day ${i + 1}`,
+        mealType: MealType.LUNCH,
+        confirmed: d.confirmed,
+    }));
 }
 
 export const updateMenuItem = async (dayOfWeek: number, mealType: MealType, item: MenuItem): Promise<DailyMenu> => {
@@ -251,7 +166,7 @@ export const updateMenuItem = async (dayOfWeek: number, mealType: MealType, item
       await updateDoc(menuDocRef, { [mealType]: mealItems });
     }
   }
-  return getMenuForDay(dayOfWeek);
+  return getMenuForDay(new Date()); // Return today's menu for simplicity, could be adapted
 }
 
 export const addMenuItem = async (dayOfWeek: number, mealType: MealType, item: Omit<MenuItem, 'id'>): Promise<DailyMenu> => {
@@ -264,7 +179,7 @@ export const addMenuItem = async (dayOfWeek: number, mealType: MealType, item: O
     mealItems.push(newItem);
     await updateDoc(menuDocRef, { [mealType]: mealItems });
   }
-  return getMenuForDay(dayOfWeek);
+  return getMenuForDay(new Date());
 }
 
 export const deleteMenuItem = async (dayOfWeek: number, mealType: MealType, itemId: string): Promise<DailyMenu> => {
@@ -276,31 +191,41 @@ export const deleteMenuItem = async (dayOfWeek: number, mealType: MealType, item
     mealItems = mealItems.filter(item => item.id !== itemId);
     await updateDoc(menuDocRef, { [mealType]: mealItems });
   }
-  return getMenuForDay(dayOfWeek);
+  return getMenuForDay(new Date());
 }
 
-// --- USER CRUD FUNCTIONS ---
+// --- USER AUTH & CRUD ---
 
-export const addUser = async (userData: Omit<User, 'id' | 'email'>): Promise<void> => {
-    const nameParts = userData.name.split(' ');
-    if (nameParts.length < 2) throw new Error("Full name required.");
+export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> => {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', userData.email.toLowerCase()));
+    const existingUser = await getDocs(q);
 
-    let domain;
-    switch (userData.role) {
-        case UserRole.MAIN_ADMIN:
-            domain = '@hr.karmic.com';
-            break;
-        case UserRole.ADMIN:
-            domain = '@canteen.karmic.com';
-            break;
-        default: // EMPLOYEE
-            domain = '@karmic.com';
+    if (!existingUser.docs.length) {
+        const docRef = await addDoc(collection(db, 'users'), userData);
+        return { ...userData, id: docRef.id };
+    } else {
+        throw new Error('User with this email already exists.');
+    }
+};
+
+export const loginUser = async (email: string, pass: string): Promise<User | null> => {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('email', '==', email.toLowerCase()));
+    const userSnapshot = await getDocs(q);
+
+    if (userSnapshot.empty) {
+        return null; // User not found
     }
 
-    const email = `${nameParts[0].toLowerCase()}.${nameParts[1].toLowerCase()}${domain}`;
-    const newUser = { ...userData, email };
-    await addDoc(collection(db, 'users'), newUser);
+    const user = userSnapshot.docs[0].data() as User;
+    if (user.password === pass) {
+        return user;
+    }
+    
+    return null; // Incorrect password
 };
+
 
 export const updateUser = async (userId: string, updatedData: Partial<User>): Promise<void> => {
     const userDocRef = doc(db, 'users', userId);
@@ -312,11 +237,49 @@ export const deleteUser = async (userId: string): Promise<void> => {
     await deleteDoc(userDocRef);
 };
 
-// Real-time listener for user management
 export const onUsersUpdate = (callback: (users: User[]) => void) => {
     const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
         const users = snapshot.docs.map((doc: any) => doc.data() as User);
         callback(users);
     });
     return unsub;
+};
+
+// --- FEEDBACK FUNCTIONS ---
+
+export const addFeedback = async (feedbackData: Omit<Feedback, 'id' | 'date'>): Promise<void> => {
+    const newFeedback = { ...feedbackData, date: new Date().toISOString().split('T')[0] };
+    await addDoc(collection(db, 'feedback'), newFeedback);
+};
+
+export const onFeedbackUpdate = (callback: (feedback: Feedback[]) => void) => {
+    const unsub = onSnapshot(collection(db, 'feedback'), (snapshot) => {
+        const feedbackItems = snapshot.docs.map((doc: any) => doc.data() as Feedback);
+        callback(feedbackItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+    return unsub;
+};
+
+// --- NOTIFICATION FUNCTIONS ---
+export const sendNotification = async (notificationData: Omit<Notification, 'id' | 'timestamp'>): Promise<void> => {
+    const newNotification = { ...notificationData, timestamp: Date.now() };
+    await addDoc(collection(db, 'notifications'), newNotification);
+};
+
+export const onNotificationsUpdate = (callback: (notifications: Notification[]) => void) => {
+    const unsub = onSnapshot(collection(db, 'notifications'), (snapshot) => {
+        const items = snapshot.docs.map((d: any) => d.data() as Notification);
+        callback(items.sort((a, b) => b.timestamp - a.timestamp));
+    });
+    return unsub;
+};
+
+export const respondToNotification = async (notificationId: string, userId: string, response: 'yes' | 'no'): Promise<void> => {
+    const notifDocRef = doc(db, 'notifications', notificationId);
+    const notifSnap = await getDoc(notifDocRef);
+    if (notifSnap.exists()) {
+        const currentNotif = notifSnap.data() as Notification;
+        const newResponses = { ...currentNotif.responses, [userId]: response };
+        await updateDoc(notifDocRef, { responses: newResponses });
+    }
 };

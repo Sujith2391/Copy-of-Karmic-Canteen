@@ -37,8 +37,8 @@ const WasteChart: React.FC = () => {
     
     return (
         <div>
-            <h3 className="text-2xl font-bold mb-4 text-onSurface">Waste Analytics (Lunch)</h3>
-            <p className="text-slate-500 mb-6">Visualizing confirmed meals vs. actual pickups to identify wastage trends.</p>
+            <h3 className="text-2xl font-bold mb-4 text-onSurface">Consumption Analytics (Lunch)</h3>
+            <p className="text-slate-500 mb-6">Visualizing confirmed meals to track consumption planning effectiveness.</p>
             <div style={{ width: '100%', height: 400 }}>
                 <ResponsiveContainer>
                     <BarChart
@@ -59,9 +59,7 @@ const WasteChart: React.FC = () => {
                             }}
                         />
                         <Legend />
-                        <Bar dataKey="confirmed" fill="#a3a3a3" name="Initially Confirmed" />
-                        <Bar dataKey="reconfirmed" fill="#16a34a" name="Reconfirmed (Final)" />
-                        <Bar dataKey="pickedUp" fill="#f97316" name="Picked Up" />
+                        <Bar dataKey="confirmed" fill="#16a34a" name="Total Confirmed" />
                     </BarChart>
                 </ResponsiveContainer>
             </div>

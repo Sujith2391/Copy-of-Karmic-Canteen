@@ -12,7 +12,9 @@ const MenuManager: React.FC = () => {
   const fetchMenu = useCallback(async (day: number) => {
     setLoading(true);
     try {
-        const menuData = await getMenuForDay(day);
+        const date = new Date();
+        date.setDate(date.getDate() - date.getDay() + day);
+        const menuData = await getMenuForDay(date);
         setMenu(menuData);
     } catch (error) {
         console.error("Failed to fetch menu for day " + day, error);
@@ -79,7 +81,7 @@ const MenuManager: React.FC = () => {
       {loading ? (
         <div className="text-center p-10">Loading menu for {weekDays[selectedDay]}...</div>
       ) : menu && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
           {Object.values(MealType).map(mealType => (
             <div key={mealType} className="bg-slate-50 p-4 rounded-lg shadow-sm border">
               <h4 className="text-lg font-semibold mb-3 text-primary">{mealType}</h4>
